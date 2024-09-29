@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 for hosting a dify server
+
+Parameters:
+  VPCStack:
+    Type: String
+    Default: llm-app-vpc
+  SGStack:
+    Type: String
+    Default: llm-app-sg
+  IAMStack:
+    Type: String
+    Default: llm-app-iam
+  EC2AMI:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  LLMAppServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref EC2AMI
+      InstanceType: t3.medium
+      SubnetId: 
+        Fn::ImportValue: !Sub ${VPCStack}-PublicSubnet
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub ${SGStack}-SecurityGroupEC2
+      KeyName: !Ref EC2KeyPair
+      UserData: !Base64 |
+        #!/bin/bash
+
+        # Install Docker
+        yum install docker git -y
+        usermod -a -G docker ec2-user
+        systemctl enable docker
+        systemctl start docker
+
+        # Install docker-compose
+        mkdir -p /usr/local/lib/docker/cli-plugins
+        curl -SL https://github.com/docker/compose/releases/download/v2.4.1/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+        chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+        # Install Dify
+        cd /usr/local
+        git clone https://github.com/langgenius/dify.git
+        cd dify/docker
+        cp .env.example .env
+        docker compose up -d
+      IamInstanceProfile:
+        Fn::ImportValue: !Sub ${IAMStack}-EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: llm-app-server
+        - Key: service
+          Value: llm-app
+
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: llm-app-server-ec2-keypair
+      Tags:
+        - Key: service
+          Value: llm-app
+
+Outputs:
+  EC2Server01:
+    Value: !Ref LLMAppServer
+    Export:
+      Name: !Sub ${AWS::StackName}-LLMAppServer

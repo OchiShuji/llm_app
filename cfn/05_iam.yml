@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: IAM Role
+
+Parameters:
+  EC2Stack:
+    Type: String
+    Default: llm-app-ec2
+
+Resources:
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${EC2Stack}-role
+      Description: "Roles for invoke a bedrock model"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: "ec2.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:       
+        - PolicyName: BedrockInvokeModel
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "bedrock:InvokeModel*"
+                Resource: "*"
+  EC2InstanceProfile: 
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: 
+        - !Ref EC2Role
+
+Outputs:
+  EC2InstanceProfile:
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-EC2InstanceProfile
+
